@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kiyoshi — Live Celo Arbitrage Dashboard</title>
+<style>
+  :root {
+    --bg: #08090a;
+    --panel: #111214;
+    --panel-2: #151619;
+    --border: #292a2d;
+    --text: #eeeef0;
+    --muted: #8b8b8e;
+    --gold: #f0ca58;
+    --gold-dim: #a88a3d;
+    --green: #7dcba1;
+    --red: #e27b7b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 12px;
+    letter-spacing: .01em;
+  }
+  .dashboard { max-width: 1220px; margin: 0 auto; padding: 20px; }
+  .top-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; margin-bottom: 12px;
+  }
+  .section-title {
+    color: #c4ad70; font-size: 10px; font-weight: 800; letter-spacing: .24em;
+    text-transform: uppercase; margin: 4px 0 12px; display: flex; align-items: center; gap: 12px; flex: 1;
+  }
+  .section-title::after { content: ""; height: 1px; background: #242426; flex: 1; }
+  .top-bar .section-title { margin: 0; }
+  .status-cluster { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .badge {
+    border: 1px solid #355443; background: rgba(125, 203, 161, .08); color: var(--green);
+    padding: 5px 9px; font-size: 9px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+  }
+  .badge.paper { border-color: #78633a; background: rgba(240, 202, 88, .08); color: var(--gold); }
+  .badge.down { border-color: #6b3535; background: rgba(226, 123, 123, .08); color: var(--red); }
+
+  .error-banner {
+    border: 1px solid #6b3535; background: #191012; color: var(--red);
+    padding: 10px 14px; border-radius: 3px; margin-bottom: 14px; font-size: 11.5px; display: none;
+  }
+
+  .grid { display: grid; gap: 12px; }
+  .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 14px; }
+  .main-grid { grid-template-columns: 1.15fr 0.85fr; margin-bottom: 22px; }
+  .activity-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); margin-bottom: 12px; }
+  .bottom-grid { grid-template-columns: 1.15fr 0.85fr; margin-bottom: 14px; }
+
+  .panel {
+    background: linear-gradient(145deg, #131416, #101113);
+    border: 1px solid var(--border); border-radius: 3px; padding: 15px 16px;
+    min-width: 0; box-shadow: 0 3px 14px rgba(0,0,0,.12);
+  }
+  .panel.highlight { border-color: #625633; box-shadow: inset 0 0 0 1px rgba(240,202,88,.08); }
+
+  .label {
+    color: #88888d; font-size: 9.5px; font-weight: 800; letter-spacing: .18em;
+    text-transform: uppercase; margin-bottom: 8px;
+  }
+  .value {
+    font-size: clamp(18px, 1.7vw, 22px); line-height: 1.15; font-weight: 650;
+    letter-spacing: -.025em; overflow-wrap: anywhere;
+  }
+  .value.gold { color: var(--gold); }
+  .value.pos { color: var(--green); }
+  .value.neg { color: var(--red); }
+
+  .sub { color: #8b8b8e; font-size: 11px; line-height: 1.45; margin-top: 6px; }
+  .sub strong { color: #c5c5c7; font-weight: 600; }
+
+  .chart-panel { display: flex; flex-direction: column; justify-content: space-between; }
+  .chart-heading { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+  .chart-heading .label { margin: 0; }
+  .chart-heading .small-value { color: #ddd; font-weight: 650; font-size: 12px; }
+  .line-chart { width: 100%; height: 145px; display: block; }
+  .chart-axis { display: flex; justify-content: space-between; color: #858589; font-size: 10px; margin-top: 8px; gap: 8px; flex-wrap: wrap; }
+
+  .wallet-address {
+    border: 1px solid #292a2d; background: #191a1c; color: #ddd; border-radius: 2px;
+    padding: 9px 10px; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow-wrap: anywhere; margin: 0 0 9px;
+  }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+  .btn {
+    border: 1px solid #716039; background: transparent; color: var(--gold);
+    padding: 7px 10px; font-size: 9.5px; font-weight: 800; letter-spacing: .11em;
+    text-transform: uppercase; cursor: pointer; text-decoration: none; font-family: inherit;
+  }
+  .btn.secondary { color: #bdbdc0; border-color: #333438; }
+  .btn.active { background: rgba(240,202,88,.14); border-color: var(--gold); color: var(--gold); }
+  .btn:hover { background: rgba(240,202,88,.08); }
+  .btn:disabled { opacity: .5; cursor: wait; }
+
+  .wallet-balance { font-size: 20px; font-weight: 650; letter-spacing: -.02em; }
+  .explain { font-size: 11px; color: #9a9a9e; line-height: 1.5; margin: 10px 0 0; }
+
+  .formula {
+    border: 1px solid #2b2c30; background: #17181a; padding: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; margin-top: 10px;
+  }
+  .formula-row { display: flex; justify-content: space-between; gap: 12px; margin: 0 0 8px; }
+  .formula-row:last-child { margin-bottom: 0; }
+  .formula-row span:first-child { color: #9a9a9e; }
+  .formula-row span:last-child { text-align: right; white-space: nowrap; font-weight: 600; }
+  .formula-row.profit span:last-child, .formula-row.total span:last-child { color: var(--gold); }
+
+  .form-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; align-items: end; margin-bottom: 10px;
+  }
+  .field label {
+    display: block; color: #88888d; font-size: 9px; font-weight: 800;
+    letter-spacing: .14em; text-transform: uppercase; margin-bottom: 5px;
+  }
+  input, select {
+    width: 100%; background: #17181a; color: var(--text); border: 1px solid #2d2e32;
+    border-radius: 2px; padding: 7px 9px; font-size: 11.5px; font-family: inherit; outline: none;
+  }
+  input:focus, select:focus { border-color: var(--gold-dim); }
+
+  .history-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .history-table th {
+    color: #8a8a8e; font-size: 9px; text-transform: uppercase; letter-spacing: .15em;
+    text-align: left; padding: 9px 7px; border-bottom: 1px solid #303034; white-space: nowrap;
+  }
+  .history-table td { padding: 10px 7px; border-bottom: 1px solid #232427; white-space: nowrap; }
+  .history-table tr:last-child td { border-bottom: none; }
+  .tag {
+    border: 1px solid #78633a; color: var(--gold); padding: 3px 6px;
+    font-size: 8.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  }
+  .tag.green { border-color: #35634a; color: var(--green); }
+  .tag.muted { border-color: #323338; color: #8a8a8e; }
+  .pos { color: var(--green); font-weight: 600; }
+  .neg { color: var(--red); font-weight: 600; }
+  .gold-txt { color: var(--gold); font-weight: 600; }
+  .muted-txt { color: var(--muted); }
+  a.tx-link { color: var(--gold); text-decoration: none; border-bottom: 1px dotted var(--gold-dim); }
+  a.tx-link:hover { color: #fff; }
+
+  .footer { color: #626267; text-align: center; font-size: 10px; margin: 20px 0 4px; }
+
+  @media (max-width: 900px) {
+    .dashboard { padding: 14px; }
+    .stats-grid, .activity-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .main-grid, .bottom-grid { grid-template-columns: 1fr; }
+    .form-grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 520px) {
+    .dashboard { padding: 10px; }
+    .panel { padding: 12px; }
+    .stats-grid, .activity-grid { gap: 8px; }
+    .value { font-size: 17px; }
+    .wallet-balance { font-size: 17px; }
+    .label { font-size: 8.5px; letter-spacing: .14em; margin-bottom: 6px; }
+    .line-chart { height: 120px; }
+    .history-table { font-size: 10.5px; }
+    .history-table th { font-size: 8px; letter-spacing: .08em; padding: 7px 5px; }
+    .history-table td { padding: 8px 5px; }
+  }
+</style>
+</head>
+<body>
+<main class="dashboard">
+  <div class="top-bar">
+    <div class="section-title">Kiyoshi · Celo Stablecoin Arbitrage Desk</div>
+    <div class="status-cluster">
+      <span id="badge" class="badge">● LIVE TRADING</span>
+      <button class="btn" id="topRefresh" type="button" onclick="load(true)">↻ Refresh Scan</button>
+    </div>
+  </div>
+
+  <div id="error-banner" class="error-banner"></div>
+
+  <!-- Row 1: 4 Overview Stat Panels -->
+  <section class="grid stats-grid" aria-label="Desk overview">
+    <article class="panel highlight">
+      <div class="label">Desk Equity</div>
+      <div class="value" id="statEquity">$0.0000</div>
+      <div class="sub" id="statEquitySub">Live from agent wallet ·<br>Baseline $0.0000</div>
+    </article>
+    <article class="panel">
+      <div class="label">Net P&amp;L</div>
+      <div class="value gold" id="statPnl">+$0.0000</div>
+      <div class="sub" id="statPnlSub"><strong>+$0.0000</strong> realized across<br>completed cycles</div>
+    </article>
+    <article class="panel">
+      <div class="label">Completed Cycles</div>
+      <div class="value" id="statCycles">0</div>
+      <div class="sub" id="statCyclesSub">0 Textile FX fills ·<br>$0.00 volume</div>
+    </article>
+    <article class="panel">
+      <div class="label">Desk Guardrails</div>
+      <div class="value" id="statMaxTrade">$20.00</div>
+      <div class="sub" id="statConfigSub">Min edge <strong>$0.007</strong> · <strong>60s</strong> loop<br>Max slip 0.30% · Hold 30m</div>
+    </article>
+  </section>
+
+  <!-- Row 2: Telemetry Chart + Agent Wallet Panel -->
+  <section class="grid main-grid">
+    <article class="panel chart-panel">
+      <div>
+        <div class="chart-heading">
+          <div class="label">Corridor Return Profile · $20 Round-Trip Output</div>
+          <div class="small-value" id="chartTopLabel">Best edge: scanning…</div>
+        </div>
+        <svg class="line-chart" viewBox="0 0 600 180" preserveAspectRatio="none" role="img" aria-label="Corridor performance chart">
+          <defs>
+            <linearGradient id="goldFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#d8b64e" stop-opacity=".32"/>
+              <stop offset="100%" stop-color="#d8b64e" stop-opacity=".02"/>
+            </linearGradient>
+          </defs>
+          <line x1="0" y1="90" x2="600" y2="90" stroke="#26272b" stroke-dasharray="4 4" stroke-width="1"/>
+          <path id="chartArea" d="M5 135 L100 122 L200 110 L300 96 L400 88 L500 76 L595 68 L595 180 L5 180 Z" fill="url(#goldFill)"/>
+          <path id="chartLine" d="M5 135 L100 122 L200 110 L300 96 L400 88 L500 76 L595 68" fill="none" stroke="#e0bf5d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="chart-axis">
+        <span id="chartLeftAxis">Corridors: wBRL · wARS · cNGN · CELO · WETH</span>
+        <span id="chartMinEdge">Min edge threshold: +$0.0070 net profit</span>
+        <span id="chartRightAxis">Live Celo Mainnet</span>
+      </div>
+    </article>
+
+    <article class="panel chart-panel">
+      <div>
+        <div class="label">Agent Wallet · Celo Mainnet</div>
+        <div class="wallet-address" id="walletAddress">0x55336b71922C8806B400c199044D38f46632fc52</div>
+        <div class="actions">
+          <a class="btn" id="celoscanLink" href="https://celoscan.io/address/0x55336b71922C8806B400c199044D38f46632fc52" target="_blank" rel="noopener noreferrer">View on Celoscan ↗</a>
+          <button class="btn secondary" id="copyWallet" type="button">Copy</button>
+          <button class="btn secondary" type="button" onclick="load(true)">Scan Now</button>
+        </div>
+        <div class="label">Live On-Chain Balance</div>
+        <div class="wallet-balance" id="walletBalance">$0.0000</div>
+        <div class="sub" id="walletSub">USDT + local stablecoins at best exit · Inventory holding: No</div>
+      </div>
+      <p class="explain" id="walletExplain">Stablecoins held in the agent wallet right now. The desk deploys up to 90% of available USDT (capped at $20/trade) whenever a two-leg route clears +$0.007 net profit.</p>
+    </article>
+  </section>
+
+  <!-- Section: Corridor Opportunities -->
+  <div class="section-title">Corridor Opportunities · Last Scan</div>
+
+  <section class="grid activity-grid" id="corridorCards">
+    <article class="panel">
+      <div class="label">wBRL · Brazil</div>
+      <div class="value" id="card-wBRL">—</div>
+      <div class="sub" id="sub-wBRL">Scanning Uniswap ↔ Textile…</div>
+    </article>
+    <article class="panel">
+      <div class="label">wARS · Argentina</div>
+      <div class="value" id="card-wARS">—</div>
+      <div class="sub" id="sub-wARS">Scanning Uniswap ↔ Textile…</div>
+    </article>
+    <article class="panel">
+      <div class="label">cNGN · Nigeria</div>
+      <div class="value" id="card-cNGN">—</div>
+      <div class="sub" id="sub-cNGN">Scanning Uniswap ↔ Textile…</div>
+    </article>
+    <article class="panel">
+      <div class="label">CELO · Native</div>
+      <div class="value" id="card-CELO">—</div>
+      <div class="sub" id="sub-CELO">Scanning Uniswap ↔ Textile…</div>
+    </article>
+    <article class="panel">
+      <div class="label">WETH · Ether</div>
+      <div class="value" id="card-WETH">—</div>
+      <div class="sub" id="sub-WETH">Scanning Uniswap ↔ Textile…</div>
+    </article>
+    <article class="panel highlight">
+      <div class="label">Best Corridor Edge</div>
+      <div class="value gold" id="card-best">—</div>
+      <div class="sub" id="sub-best">Min edge required: <strong>+$0.0070</strong></div>
+    </article>
+  </section>
+
+  <section class="panel" style="margin-bottom: 22px;">
+    <div class="chart-heading">
+      <div>
+        <div class="label">Opportunities From Last Scan</div>
+        <div class="sub" id="lastscan" style="margin-top:2px;">Fetching live corridor quotes…</div>
+      </div>
+      <div class="actions" style="margin-bottom:0;">
+        <button class="btn horizon-btn active" type="button" data-size="20">$20</button>
+        <button class="btn secondary horizon-btn" type="button" data-size="10">$10</button>
+        <button class="btn secondary horizon-btn" type="button" data-size="5">$5</button>
+        <button class="btn secondary horizon-btn" type="button" data-size="all">All Sizes</button>
+        <button class="btn" id="refresh" type="button" onclick="load(true)">↻ Refresh</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Corridor</th>
+            <th>Route</th>
+            <th>Stake Size</th>
+            <th>Projected Output</th>
+            <th>Net Edge</th>
+            <th>Signal</th>
+          </tr>
+        </thead>
+        <tbody id="opps">
+          <tr><td colspan="6" class="muted-txt">Scanning Celo corridors (wBRL · wARS · cNGN)…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Section: Execution History & Non-Custodial Convert -->
+  <div class="section-title">Trading History &amp; Best-Rate Convert</div>
+
+  <section class="grid bottom-grid">
+    <article class="panel">
+      <div class="label">Recent Cycles &amp; Fills</div>
+      <div style="overflow-x:auto;">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Time (UTC)</th>
+              <th>Event</th>
+              <th>Corridor &amp; Route</th>
+              <th>Size</th>
+              <th>Net P&amp;L</th>
+              <th>TX</th>
+            </tr>
+          </thead>
+          <tbody id="trades">
+            <tr><td colspan="6" class="muted-txt">Loading fills…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="explain">Read from the agent wallet's live execution ledger on Celo. Each cycle buys on one venue (Uniswap v3 or Textile FX) and immediately sells back to USDT on the other.</p>
+    </article>
+
+    <article class="panel">
+      <div class="label">Convert · Best Rate Quoter (Non-Custodial)</div>
+      <div class="form-grid">
+        <div class="field">
+          <label for="cv-amount">Amount</label>
+          <input type="number" id="cv-amount" value="20" min="0.01" step="0.01">
+        </div>
+        <div class="field">
+          <label for="cv-from">From</label>
+          <select id="cv-from"></select>
+        </div>
+        <div class="field">
+          <label for="cv-to">To</label>
+          <select id="cv-to"></select>
+        </div>
+        <button class="btn" id="cv-btn" type="button" onclick="quote()">Quote</button>
+      </div>
+
+      <div class="formula" id="cv-result">
+        <div class="formula-row"><span>Uniswap v3 output</span><span id="q-uni">—</span></div>
+        <div class="formula-row"><span>Textile FX output</span><span id="q-tex">—</span></div>
+        <div class="formula-row profit"><span>Best venue</span><span id="q-best">Click Quote above</span></div>
+        <div class="formula-row total"><span>Rate advantage</span><span id="q-adv">—</span></div>
+      </div>
+      <p class="explain">Compares live Uniswap v3 pool depth against Textile FX RFQ quotes across Celo stablecoin corridors (USDT ↔ wBRL, wARS, cNGN).</p>
+    </article>
+  </section>
+
+  <div class="footer" id="footer">KIYOSHI LIVE · Connected to Celo arbitrage desk · Auto-refreshes every 60s</div>
+</main>
+
+<script src="config.js"></script>
+<script>
+const BACKEND_API = (typeof API !== "undefined" && API) ? API : "https://kiyoshi-ck14.onrender.com";
+const TOKENS = ["USDT", "wBRL", "wARS", "cNGN", "CELO", "WETH"];
+const CORRIDORS = ["wBRL", "wARS", "cNGN", "CELO", "WETH"];
+let selectedHorizon = "20";
+let lastStatus = null;
+
+// Fallback snapshot from https://kiyoshi-ck14.onrender.com used only inside offline sandboxed preview iframes
+const OFFLINE_PREVIEW_STATUS = {
+  agent: { name: "Kiyoshi Live", wallet: "0x55336b71922C8806B400c199044D38f46632fc52", erc8004AgentId: 9991, attributionTag: "celo_f6214d29d540" },
+  live: true,
+  config: { maxTradeUsd: 20, minEdgeUsd: 0.007, intervalSec: 60, maxFlattenLossBps: 50, maxHoldMin: 30 },
+  equity: 0,
+  baselineEquity: 0,
+  realizedPnl: 0,
+  completedCycles: 0,
+  textileFills: 0,
+  textileVolumeUsd: 0,
+  holding: false,
+  lastScan: {
+    at: "2026-10-28T10:46:50.663Z",
+    source: "Live RFQ + Uniswap v3",
+    opps: [
+      { X: "WETH", route: "uni->textile", sizeUsd: 20, outUsd: 20.0034, edge: 0.003424 },
+      { X: "CELO", route: "uni->textile", sizeUsd: 20, outUsd: 19.9965, edge: -0.003488 },
+      { X: "cNGN", route: "textile->uni", sizeUsd: 20, outUsd: 19.9973, edge: -0.002727 },
+      { X: "wARS", route: "uni->textile", sizeUsd: 10, outUsd: 9.9981, edge: -0.001891 },
+      { X: "cNGN", route: "uni->textile", sizeUsd: 20, outUsd: 19.9903, edge: -0.009698 },
+      { X: "WETH", route: "textile->uni", sizeUsd: 20, outUsd: 19.9738, edge: -0.026243 },
+      { X: "CELO", route: "textile->uni", sizeUsd: 20, outUsd: 19.9728, edge: -0.027165 },
+      { X: "wBRL", route: "uni->textile", sizeUsd: 10, outUsd: 9.9537, edge: -0.046321 }
+    ]
+  }
+};
+
+// ---------- Stake Size Filter Buttons ----------
+const horizonButtons = [...document.querySelectorAll(".horizon-btn")];
+horizonButtons.forEach(btn => {
+  btn.addEventListener("click", () => {
+    horizonButtons.forEach(b => { b.classList.remove("active"); b.classList.add("secondary"); });
+    btn.classList.remove("secondary");
+    btn.classList.add("active");
+    selectedHorizon = btn.dataset.size;
+    if (selectedHorizon !== "all") {
+      document.getElementById("cv-amount").value = selectedHorizon;
+    }
+    load(true);
+  });
+});
+
+// ---------- Copy Wallet ----------
+document.getElementById("copyWallet").addEventListener("click", async () => {
+  const copyBtn = document.getElementById("copyWallet");
+  const address = document.getElementById("walletAddress").textContent.trim();
+  try {
+    await navigator.clipboard.writeText(address);
+    copyBtn.textContent = "Copied!";
+    setTimeout(() => { copyBtn.textContent = "Copy"; }, 1500);
+  } catch {
+    copyBtn.textContent = "Selected";
+  }
+});
+
+function fmt(v, d = 2) {
+  return v === null || v === undefined || Number.isNaN(Number(v)) ? "—" : Number(v).toFixed(d);
+}
+function fmtEdgeConfig(v) {
+  if (v === null || v === undefined || Number.isNaN(Number(v))) return "0.01";
+  const n = Number(v);
+  return n < 0.01 ? String(n) : n.toFixed(2);
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ---------- Render Status & Stats ----------
+function renderBadge(s) {
+  const el = document.getElementById("badge");
+  el.className = "badge " + (s.live ? "" : "paper");
+  el.textContent = s.live ? "● LIVE TRADING" : "◐ PAPER MODE";
+}
+
+function renderStats(s) {
+  const cfg = s.config || {};
+  const eq = s.equity ?? 0;
+  const base = s.baselineEquity ?? 0;
+  const pnl = (s.equity !== null && s.baselineEquity !== null) ? Number(eq) - Number(base) : 0;
+  const realized = Number(s.realizedPnl ?? 0);
+
+  document.getElementById("statEquity").textContent = "$" + fmt(eq, 4);
+  document.getElementById("statEquitySub").innerHTML =
+    `Live from agent wallet ·<br>Baseline <strong>$${fmt(base, 4)}</strong>`;
+
+  const pnlEl = document.getElementById("statPnl");
+  pnlEl.textContent = `${pnl >= 0 ? "+" : "-"}$${Math.abs(pnl).toFixed(4)}`;
+  pnlEl.className = "value " + (pnl > 0 ? "pos" : (pnl < 0 ? "neg" : "gold"));
+  document.getElementById("statPnlSub").innerHTML =
+    `<strong>${realized >= 0 ? "+" : "-"}$${Math.abs(realized).toFixed(4)}</strong> realized across<br>completed cycles`;
+
+  document.getElementById("statCycles").textContent = String(s.completedCycles ?? 0);
+  document.getElementById("statCyclesSub").innerHTML =
+    `${s.textileFills ?? 0} Textile FX fills ·<br><strong>$${fmt(s.textileVolumeUsd ?? 0, 2)}</strong> volume`;
+
+  const minEdgeVal = cfg.minEdgeUsd ?? 0.007;
+  document.getElementById("statMaxTrade").textContent = "$" + fmt(cfg.maxTradeUsd ?? 20, 2);
+  document.getElementById("statConfigSub").innerHTML =
+    `Min edge <strong>$${fmtEdgeConfig(minEdgeVal)}</strong> · <strong>${fmt(cfg.intervalSec ?? 60, 0)}s</strong> loop<br>Max slip 0.30% · Hold ${fmt(cfg.maxHoldMin ?? 30, 0)}m`;
+  document.getElementById("chartMinEdge").textContent =
+    `Min edge threshold: +$${fmt(minEdgeVal, 4)} net profit`;
+  document.getElementById("walletExplain").textContent =
+    `Stablecoins held in the agent wallet right now. The desk deploys up to 90% of available USDT (capped at $${fmt(cfg.maxTradeUsd ?? 20, 0)}/trade) whenever a two-leg route clears +$${fmtEdgeConfig(minEdgeVal)} net profit.`;
+
+  const wallet = (s.agent && s.agent.wallet) ? s.agent.wallet : "0x55336b71922C8806B400c199044D38f46632fc52";
+  document.getElementById("walletAddress").textContent = wallet;
+  document.getElementById("celoscanLink").href = `https://celoscan.io/address/${encodeURIComponent(wallet)}`;
+  document.getElementById("walletBalance").textContent = "$" + fmt(eq, 4);
+  document.getElementById("walletSub").textContent =
+    `USDT + local stablecoins at best exit · Inventory holding: ${s.holding ? "Yes (managing)" : "No"}`;
+}
+
+// ---------- Live Corridor Scanner Fallback via /convert/quote ----------
+async function scanSingleCorridorSize(X, sizeUsd) {
+  const results = [];
+  try {
+    const q1 = await fetchJSON(`/convert/quote?from=USDT&to=${X}&amount=${sizeUsd}`);
+    if (q1 && q1.uniswap && q1.uniswap.out) {
+      try {
+        const q2a = await fetchJSON(`/convert/quote?from=${X}&to=USDT&amount=${q1.uniswap.out}`);
+        if (q2a && q2a.textile && q2a.textile.out) {
+          const outUsd = Number(q2a.textile.out);
+          results.push({ X, route: "uni->textile", sizeUsd: Number(sizeUsd), outUsd, edge: outUsd - Number(sizeUsd) });
+        }
+      } catch {}
+    }
+    if (q1 && q1.textile && q1.textile.out) {
+      try {
+        const q2b = await fetchJSON(`/convert/quote?from=${X}&to=USDT&amount=${q1.textile.out}`);
+        if (q2b && q2b.uniswap && q2b.uniswap.out) {
+          const outUsd = Number(q2b.uniswap.out);
+          results.push({ X, route: "textile->uni", sizeUsd: Number(sizeUsd), outUsd, edge: outUsd - Number(sizeUsd) });
+        }
+      } catch {}
+    }
+  } catch {}
+  return results;
+}
+
+async function runLiveClientScan() {
+  const sizes = selectedHorizon === "all" ? [20, 10, 5] : [Number(selectedHorizon) || 20];
+  const tasks = [];
+  for (const sz of sizes) {
+    for (const X of CORRIDORS) tasks.push(scanSingleCorridorSize(X, sz));
+  }
+  const opps = (await Promise.all(tasks)).flat().sort((a, b) => b.edge - a.edge);
+  return { at: new Date().toISOString(), source: "Live RFQ + Uniswap v3", opps };
+}
+
+function renderCorridorCardsAndChart(scan, minEdge = 0.01) {
+  const opps = (scan && scan.opps) ? scan.opps : [];
+  CORRIDORS.forEach(X => {
+    const bestForX = opps.find(o => o.X === X);
+    const valEl = document.getElementById(`card-${X}`);
+    const subEl = document.getElementById(`sub-${X}`);
+    if (bestForX) {
+      const e = Number(bestForX.edge);
+      valEl.textContent = `${e >= 0 ? "+" : "-"}$${Math.abs(e).toFixed(4)}`;
+      valEl.className = "value " + (e >= minEdge ? "pos" : (e >= 0 ? "gold" : ""));
+      subEl.innerHTML = `<strong>${escapeHtml(bestForX.route)}</strong> · $${fmt(bestForX.sizeUsd, 0)} → $${fmt(bestForX.outUsd, 4)}`;
+    } else {
+      valEl.textContent = "—";
+      valEl.className = "value";
+      subEl.textContent = "No two-leg quote right now";
+    }
+  });
+
+  const best = opps[0];
+  const bestEl = document.getElementById("card-best");
+  const bestSub = document.getElementById("sub-best");
+  const chartLabel = document.getElementById("chartTopLabel");
+  if (best) {
+    const e = Number(best.edge);
+    const str = `${e >= 0 ? "+" : "-"}$${Math.abs(e).toFixed(4)}`;
+    bestEl.textContent = `${best.X} ${str}`;
+    bestEl.className = "value " + (e >= minEdge ? "pos" : "gold");
+    bestSub.innerHTML = `Route <strong>${escapeHtml(best.route)}</strong> on $${fmt(best.sizeUsd, 2)}`;
+    chartLabel.textContent = `Best: ${best.X} (${best.route}) ${str}`;
+  } else {
+    bestEl.textContent = "—";
+    bestSub.innerHTML = `Min edge required: <strong>+$${fmt(minEdge, 4)}</strong>`;
+    chartLabel.textContent = "Awaiting scan…";
+  }
+}
+
+function renderOpps(scan, minEdge = 0.01) {
+  const tb = document.getElementById("opps");
+  const ls = document.getElementById("lastscan");
+  renderCorridorCardsAndChart(scan, minEdge);
+
+  if (!scan || !scan.opps) {
+    tb.innerHTML = '<tr><td colspan="6" class="muted-txt">No scan yet — click Refresh to scan live Celo corridors.</td></tr>';
+    ls.textContent = "No scan yet";
+    return;
+  }
+
+  const src = scan.source ? ` · ${scan.source}` : "";
+  ls.textContent = `Last scan: ${String(scan.at).replace("T", " ").slice(0, 19)} UTC${src}`;
+
+  let list = scan.opps;
+  if (selectedHorizon !== "all") {
+    const target = Number(selectedHorizon);
+    const filtered = list.filter(o => Math.abs(Number(o.sizeUsd) - target) < 0.01);
+    if (filtered.length) list = filtered;
+  }
+
+  if (!list.length) {
+    tb.innerHTML = '<tr><td colspan="6" class="muted-txt">No active two-leg quotes for this stake size right now.</td></tr>';
+    return;
+  }
+
+  tb.innerHTML = list.map(o => {
+    const edge = Number(o.edge);
+    const cls = edge >= 0 ? "pos" : "neg";
+    const sign = edge >= 0 ? "+" : "-";
+    const tagHtml = edge >= minEdge
+      ? '<span class="tag green">TRADEABLE</span>'
+      : (edge >= 0 ? '<span class="tag">MICRO EDGE</span>' : '<span class="tag muted">BELOW MIN</span>');
+    return `<tr>
+      <td><strong>${escapeHtml(o.X)}</strong> / USDT</td>
+      <td>${escapeHtml(o.route)}</td>
+      <td>$${fmt(o.sizeUsd, 2)}</td>
+      <td>$${fmt(o.outUsd, 4)}</td>
+      <td class="${cls}">${sign}$${Math.abs(edge).toFixed(4)}</td>
+      <td>${tagHtml}</td>
+    </tr>`;
+  }).join("");
+}
+
+function renderTrades(trades, minEdge = 0.007) {
+  const tb = document.getElementById("trades");
+  if (!trades || !trades.length) {
+    tb.innerHTML = `<tr><td colspan="6" class="muted-txt">No fills yet — executed trades appear here once wallet is funded ($2+ USDT) and edge ≥ $${fmtEdgeConfig(minEdge)}.</td></tr>`;
+    return;
+  }
+  tb.innerHTML = trades.map(t => {
+    const pn = t.pnl;
+    const hasPnl = pn !== null && pn !== undefined && !Number.isNaN(Number(pn));
+    const pnNum = hasPnl ? Number(pn) : 0;
+    const pnTxt = !hasPnl
+      ? '<span class="muted-txt">—</span>'
+      : `<span class="${pnNum >= 0 ? "pos" : "neg"}">${pnNum >= 0 ? "+" : "-"}$${Math.abs(pnNum).toFixed(4)}</span>`;
+    const tx = t.tx2 || t.tx || t.tx1 || "";
+    const txCell = tx
+      ? `<a class="tx-link" href="https://celoscan.io/tx/${encodeURIComponent(tx)}" target="_blank" rel="noopener">${escapeHtml(tx.slice(0, 10))}… ↗</a>`
+      : "—";
+    return `<tr>
+      <td>${escapeHtml(String(t.ts || "").slice(5, 19).replace("T", " "))}</td>
+      <td><span class="tag">${escapeHtml((t.event || "cycle").toUpperCase())}</span></td>
+      <td>${escapeHtml((t.X || "") + " " + (t.route || t.venue || ""))}</td>
+      <td>${typeof t.sizeUsd === "number" ? "$" + fmt(t.sizeUsd, 2) : "—"}</td>
+      <td>${pnTxt}</td>
+      <td>${txCell}</td>
+    </tr>`;
+  }).join("");
+}
+
+function showError(msg) {
+  const b = document.getElementById("error-banner");
+  b.style.display = msg ? "block" : "none";
+  b.textContent = msg;
+}
+
+// ---------- Fetch & Sync ----------
+async function fetchJSON(path) {
+  const r = await fetch(BACKEND_API + path, { cache: "no-store" });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+async function load(manual = false) {
+  const btn1 = document.getElementById("refresh");
+  const btn2 = document.getElementById("topRefresh");
+  if (manual) { btn1.disabled = true; btn2.disabled = true; }
+  try {
+    const [status, trades] = await Promise.all([
+      fetchJSON("/status"),
+      fetchJSON("/trades?limit=25"),
+    ]);
+    const minEdge = status.config?.minEdgeUsd ?? 0.007;
+    lastStatus = status;
+    renderBadge(status);
+    renderStats(status);
+    renderTrades(trades, minEdge);
+    showError("");
+
+    let scanData = status.lastScan;
+    if (!scanData || manual) {
+      scanData = await runLiveClientScan();
+    }
+    renderOpps(scanData, minEdge);
+
+    document.getElementById("footer").textContent =
+      `KIYOSHI LIVE · Source: ${BACKEND_API} · Auto-refresh every 60s · Synced ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    if (window.origin === "null") {
+      renderBadge(OFFLINE_PREVIEW_STATUS);
+      renderStats(OFFLINE_PREVIEW_STATUS);
+      renderOpps(OFFLINE_PREVIEW_STATUS.lastScan, 0.007);
+      renderTrades([], 0.007);
+      showError("");
+    } else {
+      document.getElementById("badge").className = "badge down";
+      document.getElementById("badge").textContent = "BACKEND UNREACHABLE";
+      showError(`Can't reach the trading backend at ${BACKEND_API}. The Render service may be waking up or redeploying.`);
+    }
+  } finally {
+    btn1.disabled = false;
+    btn2.disabled = false;
+  }
+}
+
+// ---------- Convert Quoter ----------
+function initConvert() {
+  const from = document.getElementById("cv-from");
+  const to = document.getElementById("cv-to");
+  TOKENS.forEach(t => {
+    from.insertAdjacentHTML("beforeend", `<option value="${t}">${t}</option>`);
+    to.insertAdjacentHTML("beforeend", `<option value="${t}">${t}</option>`);
+  });
+  from.value = "USDT";
+  to.value = "wBRL";
+}
+
+async function quote() {
+  const btn = document.getElementById("cv-btn");
+  const amount = parseFloat(document.getElementById("cv-amount").value);
+  const from = document.getElementById("cv-from").value;
+  const to = document.getElementById("cv-to").value;
+  if (!(amount > 0)) { alert("Enter an amount > 0"); return; }
+  if (from === to) { alert("From and To must differ"); return; }
+  btn.disabled = true;
+  btn.textContent = "…";
+  try {
+    const q = await fetchJSON(`/convert/quote?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&amount=${encodeURIComponent(amount)}`);
+    document.getElementById("q-uni").textContent = q.uniswap ? `${Number(q.uniswap.out).toFixed(4)} ${to}` : "No route";
+    document.getElementById("q-tex").textContent = q.textile ? `${Number(q.textile.out).toFixed(4)} ${to}` : "No quote";
+    document.getElementById("q-best").textContent = q.best ? (q.best === "textile" ? "Textile FX" : "Uniswap v3") : "None";
+    document.getElementById("q-adv").textContent = q.advantage ? `+${Number(q.advantage.pct).toFixed(2)}% better` : "Single venue";
+  } catch (e) {
+    document.getElementById("q-best").textContent = "Quote failed";
+    document.getElementById("q-adv").textContent = String(e.message || e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Quote";
+  }
+}
+
+initConvert();
+load(false);
+setInterval(() => load(false), 60000);
+</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a5195fc0292f9953',t:'MTc5MzE4NDU2OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
